@@ -1,0 +1,8 @@
+{
+  "name": "Remix CineTrack Noir",
+  "description": "Plataforma web SPA para cinéfilos con catálogo curado, ranking personal, comunidad y sugerencia de películas con componentes Vue, transiciones y almacenamiento local.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
