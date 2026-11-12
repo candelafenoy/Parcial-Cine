@@ -146,8 +146,11 @@ CREATE TABLE IF NOT EXISTS public.comment_replies (
 
 -- ==============================================================================
 -- 9. VISTA OPTIMIZADA: FEED SOCIAL DE SEGUIDOS
+-- (Se elimina con CASCADE para prevenir el error 42P16 si cambian las columnas)
 -- ==============================================================================
-CREATE OR REPLACE VIEW public.v_followed_feed AS
+DROP VIEW IF EXISTS public.v_followed_feed CASCADE;
+
+CREATE VIEW public.v_followed_feed AS
 SELECT
     c.id AS comment_id,
     c.content,
@@ -178,12 +181,25 @@ ALTER TABLE public.movie_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_replies ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Público para todos" ON public.profiles;
 CREATE POLICY "Público para todos" ON public.profiles FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Público para todos" ON public.movies;
 CREATE POLICY "Público para todos" ON public.movies FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Público para todos" ON public.user_movies;
 CREATE POLICY "Público para todos" ON public.user_movies FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Público para todos" ON public.user_follows;
 CREATE POLICY "Público para todos" ON public.user_follows FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Público para todos" ON public.movie_comments;
 CREATE POLICY "Público para todos" ON public.movie_comments FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Público para todos" ON public.comment_likes;
 CREATE POLICY "Público para todos" ON public.comment_likes FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Público para todos" ON public.comment_replies;
 CREATE POLICY "Público para todos" ON public.comment_replies FOR SELECT USING (true);`;
 
 function copySql() {

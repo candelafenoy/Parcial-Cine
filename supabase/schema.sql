@@ -1,5 +1,5 @@
 -- ==============================================================================
--- CINETRACK NOIR - SUPABASE POSTGRESQL SCHEMA
+-- CINETRACK NOIR - SUPABASE POSTGRESQL SCHEMA (IDEMPOTENTE Y SEGURO)
 -- Manejo de usuarios, persistencia de películas, rankings personales,
 -- sistema de seguidos (follows) e interacciones sociales (comentarios, me gusta y respuestas).
 -- ==============================================================================
@@ -154,19 +154,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE TRIGGER tr_profiles_updated_at
+DROP TRIGGER IF EXISTS tr_profiles_updated_at ON public.profiles;
+CREATE TRIGGER tr_profiles_updated_at
 BEFORE UPDATE ON public.profiles
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
-CREATE OR REPLACE TRIGGER tr_movies_updated_at
+DROP TRIGGER IF EXISTS tr_movies_updated_at ON public.movies;
+CREATE TRIGGER tr_movies_updated_at
 BEFORE UPDATE ON public.movies
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
-CREATE OR REPLACE TRIGGER tr_user_movies_updated_at
+DROP TRIGGER IF EXISTS tr_user_movies_updated_at ON public.user_movies;
+CREATE TRIGGER tr_user_movies_updated_at
 BEFORE UPDATE ON public.user_movies
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
-CREATE OR REPLACE TRIGGER tr_movie_comments_updated_at
+DROP TRIGGER IF EXISTS tr_movie_comments_updated_at ON public.movie_comments;
+CREATE TRIGGER tr_movie_comments_updated_at
 BEFORE UPDATE ON public.movie_comments
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
@@ -196,15 +200,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
 AFTER INSERT ON auth.users
 FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
 
 -- ==============================================================================
 -- 11. VISTA: FEED SOCIAL DE SEGUIDOS (Comentarios que publicaron los seguidos)
--- Permite consultar eficientemente el muro de reseñas de la gente a quien se sigue.
+-- Se elimina primero con CASCADE para evitar el error 42P16 (cannot drop columns from view)
 -- ==============================================================================
-CREATE OR REPLACE VIEW public.v_followed_feed AS
+DROP VIEW IF EXISTS public.v_followed_feed CASCADE;
+
+CREATE VIEW public.v_followed_feed AS
 SELECT
     c.id AS comment_id,
     c.content,
@@ -230,6 +237,7 @@ JOIN public.user_follows f ON f.following_id = c.user_id;
 
 -- ==============================================================================
 -- 12. ROW LEVEL SECURITY (RLS) POLICIES
+-- Idempotente: Se eliminan las políticas si ya existen antes de crearlas
 -- ==============================================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.movies ENABLE ROW LEVEL SECURITY;
@@ -240,75 +248,97 @@ ALTER TABLE public.comment_likes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comment_replies ENABLE ROW LEVEL SECURITY;
 
 -- Politicas para PROFILES
+DROP POLICY IF EXISTS "Perfiles públicos visibles para todos" ON public.profiles;
 CREATE POLICY "Perfiles públicos visibles para todos"
 ON public.profiles FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Los usuarios pueden actualizar su propio perfil" ON public.profiles;
 CREATE POLICY "Los usuarios pueden actualizar su propio perfil"
 ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Politicas para MOVIES
+DROP POLICY IF EXISTS "Catálogo de películas visible para todos" ON public.movies;
 CREATE POLICY "Catálogo de películas visible para todos"
 ON public.movies FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Usuarios autenticados pueden sugerir/crear películas" ON public.movies;
 CREATE POLICY "Usuarios autenticados pueden sugerir/crear películas"
 ON public.movies FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Usuarios autenticados pueden actualizar películas" ON public.movies;
 CREATE POLICY "Usuarios autenticados pueden actualizar películas"
 ON public.movies FOR UPDATE USING (auth.role() = 'authenticated');
 
 -- Politicas para USER_MOVIES (Rankings y colecciones)
+DROP POLICY IF EXISTS "Rankings y colecciones son públicos para la comunidad" ON public.user_movies;
 CREATE POLICY "Rankings y colecciones son públicos para la comunidad"
 ON public.user_movies FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Usuarios gestionan su propia colección y ranking" ON public.user_movies;
 CREATE POLICY "Usuarios gestionan su propia colección y ranking"
 ON public.user_movies FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Usuarios actualizan su propio ranking y notas" ON public.user_movies;
 CREATE POLICY "Usuarios actualizan su propio ranking y notas"
 ON public.user_movies FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Usuarios eliminan películas de su colección" ON public.user_movies;
 CREATE POLICY "Usuarios eliminan películas de su colección"
 ON public.user_movies FOR DELETE USING (auth.uid() = user_id);
 
 -- Politicas para USER_FOLLOWS
+DROP POLICY IF EXISTS "Relaciones de seguimiento visibles públicamente" ON public.user_follows;
 CREATE POLICY "Relaciones de seguimiento visibles públicamente"
 ON public.user_follows FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Usuarios pueden seguir a otros cinéfilos" ON public.user_follows;
 CREATE POLICY "Usuarios pueden seguir a otros cinéfilos"
 ON public.user_follows FOR INSERT WITH CHECK (auth.uid() = follower_id);
 
+DROP POLICY IF EXISTS "Usuarios pueden dejar de seguir" ON public.user_follows;
 CREATE POLICY "Usuarios pueden dejar de seguir"
 ON public.user_follows FOR DELETE USING (auth.uid() = follower_id);
 
 -- Politicas para MOVIE_COMMENTS
+DROP POLICY IF EXISTS "Comentarios en películas visibles para todos" ON public.movie_comments;
 CREATE POLICY "Comentarios en películas visibles para todos"
 ON public.movie_comments FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Usuarios autenticados pueden comentar películas" ON public.movie_comments;
 CREATE POLICY "Usuarios autenticados pueden comentar películas"
 ON public.movie_comments FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Autores pueden editar sus comentarios" ON public.movie_comments;
 CREATE POLICY "Autores pueden editar sus comentarios"
 ON public.movie_comments FOR UPDATE USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Autores pueden borrar sus comentarios" ON public.movie_comments;
 CREATE POLICY "Autores pueden borrar sus comentarios"
 ON public.movie_comments FOR DELETE USING (auth.uid() = user_id);
 
 -- Politicas para COMMENT_LIKES
+DROP POLICY IF EXISTS "Me gusta visibles públicamente" ON public.comment_likes;
 CREATE POLICY "Me gusta visibles públicamente"
 ON public.comment_likes FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Usuarios autenticados pueden dar me gusta" ON public.comment_likes;
 CREATE POLICY "Usuarios autenticados pueden dar me gusta"
 ON public.comment_likes FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Usuarios pueden retirar su me gusta" ON public.comment_likes;
 CREATE POLICY "Usuarios pueden retirar su me gusta"
 ON public.comment_likes FOR DELETE USING (auth.uid() = user_id);
 
 -- Politicas para COMMENT_REPLIES
+DROP POLICY IF EXISTS "Respuestas visibles públicamente" ON public.comment_replies;
 CREATE POLICY "Respuestas visibles públicamente"
 ON public.comment_replies FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Usuarios autenticados pueden responder comentarios" ON public.comment_replies;
 CREATE POLICY "Usuarios autenticados pueden responder comentarios"
 ON public.comment_replies FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Autores pueden eliminar sus respuestas" ON public.comment_replies;
 CREATE POLICY "Autores pueden eliminar sus respuestas"
 ON public.comment_replies FOR DELETE USING (auth.uid() = user_id);
 
